@@ -78,6 +78,7 @@ class Config:
 
     # 界面资源
     HQ_ICON_FILE = DATA_DIR / "hq.png"
+    APP_ICON_FILE = BASE_DIR / "Assets" / "paissa.ico"
     PROGRAM_VERSION = "2.1.1"
 
     # API基础URL

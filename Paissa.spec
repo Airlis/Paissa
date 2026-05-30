@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 datas = [
+    ("Assets/paissa.ico", "Assets"),
     ("Data/hq.png", "Data"),
     ("Data/item.Pdt", "Data"),
     ("Data/marketable.py", "Data"),
@@ -28,6 +29,7 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name="Paissa",
+    icon="Assets/paissa.ico",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

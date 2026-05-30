@@ -1298,6 +1298,8 @@ def run_app():
     widget = RQMainWindow()
     ui = MainWindow(widget)
     ui.setupUi(widget)
+    if Config.APP_ICON_FILE.exists():
+        widget.setWindowIcon(QtGui.QIcon(str(Config.APP_ICON_FILE)))
     apply_font_family(widget)
     widget.resize(int(desktop.width() * 0.6), int(desktop.height() * 0.6))
     ui.setup_menu()
