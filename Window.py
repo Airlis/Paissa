@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import time
+import ctypes
 from collections import deque
 
 from PyQt5 import QtWidgets, QtGui, QtCore
@@ -19,6 +20,7 @@ from UI.select_item_list import Ui_select_item_list
 from UI.show_price import Ui_show_price
 
 APP_FONT_FAMILY = "Microsoft YaHei"
+APP_USER_MODEL_ID = "Airlis.Paissa.NA"
 
 """
 .ui文件是使用 QT desginer 生成的文件，通过 pyuic 将 .ui 文件转换为 .py 文件。 
@@ -57,6 +59,16 @@ def is_na_server(server):
 
 def normalize_na_server(server):
     return server if is_na_server(server) else Config.DEFAULT_SERVER
+
+
+def set_windows_app_user_model_id():
+    """让 Windows 任务栏使用本应用自己的图标和分组。"""
+    if sys.platform != "win32":
+        return
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
+    except Exception as e:
+        logger.debug(f"设置 Windows AppUserModelID 失败: {e}")
 
 
 class ErrorCoordinator:
@@ -1288,7 +1300,11 @@ def run_app():
     """
     主程序开始
     """
+    set_windows_app_user_model_id()
     app = QtWidgets.QApplication(sys.argv)
+    app_icon = QtGui.QIcon(str(Config.APP_ICON_FILE)) if Config.APP_ICON_FILE.exists() else QtGui.QIcon()
+    if not app_icon.isNull():
+        app.setWindowIcon(app_icon)
     app_font = app.font()
     app_font.setFamily(APP_FONT_FAMILY)
     app.setFont(app_font)
@@ -1298,8 +1314,8 @@ def run_app():
     widget = RQMainWindow()
     ui = MainWindow(widget)
     ui.setupUi(widget)
-    if Config.APP_ICON_FILE.exists():
-        widget.setWindowIcon(QtGui.QIcon(str(Config.APP_ICON_FILE)))
+    if not app_icon.isNull():
+        widget.setWindowIcon(app_icon)
     apply_font_family(widget)
     widget.resize(int(desktop.width() * 0.6), int(desktop.height() * 0.6))
     ui.setup_menu()
@@ -1382,6 +1398,8 @@ def run_app():
     查询历史面板
     """
     widget2 = QtWidgets.QMainWindow()
+    if not app_icon.isNull():
+        widget2.setWindowIcon(app_icon)
     history_board = HistoryPage()
     history_board.setupUi(widget2)
     apply_font_family(widget2)
@@ -1401,6 +1419,8 @@ def run_app():
     check update
     """
     widget3 = QtWidgets.QMainWindow()
+    if not app_icon.isNull():
+        widget3.setWindowIcon(app_icon)
     check_update_window = CheckUpdate()
     check_update_window.setupUi(widget3)
     apply_font_family(widget3)
