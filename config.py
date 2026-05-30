@@ -44,6 +44,9 @@ class Config:
     PRICE_CACHE_SIZE = 1000
     CACHE_EXPIRE_TIME = 300  # 5分钟
 
+    # 默认 Universalis 查询范围，可填大区（如 North-America）或具体服务器/数据中心
+    DEFAULT_SERVER = "North-America"
+
     # 服务器配置
     SERVER_CONFIG = {
         "version": "1.0",

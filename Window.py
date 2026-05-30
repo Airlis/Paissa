@@ -18,12 +18,45 @@ from UI.query_item_id import Ui_query_item_id
 from UI.select_item_list import Ui_select_item_list
 from UI.show_price import Ui_show_price
 
+APP_FONT_FAMILY = "Microsoft YaHei"
+
 """
 .ui文件是使用 QT desginer 生成的文件，通过 pyuic 将 .ui 文件转换为 .py 文件。 
 所以 ui文件 和成对出现的 py文件 不会做任何修改，界面行为在这里进行重新定义，后台查询功能在 Queryer 内实现。
 """
 # 解决中文路径的问题  https://github.com/skywind3000/PyStand/issues/6
 QtCore.QCoreApplication.addLibraryPath(r'.\site-packages\PyQt5\Qt5\plugins')
+
+
+def apply_font_family(*roots):
+    """将界面字体统一切到微软雅黑，同时保留各控件原本字号。"""
+    for root in roots:
+        if root is None:
+            continue
+        objects = [root]
+        if hasattr(root, "findChildren"):
+            objects.extend(root.findChildren(QtCore.QObject))
+        for obj in objects:
+            if hasattr(obj, "font") and hasattr(obj, "setFont"):
+                try:
+                    font = obj.font()
+                    font.setFamily(APP_FONT_FAMILY)
+                    obj.setFont(font)
+                except TypeError:
+                    continue
+
+
+def is_na_server(server):
+    if server in (None, "None", Config.DEFAULT_SERVER):
+        return True
+    na_regions = Config.SERVER_CONFIG["area_mappings"]["North-America"]
+    if server in na_regions:
+        return True
+    return any(server in Config.SERVER_CONFIG["world_regions"].get(region, []) for region in na_regions)
+
+
+def normalize_na_server(server):
+    return server if is_na_server(server) else Config.DEFAULT_SERVER
 
 
 class ErrorCoordinator:
@@ -165,6 +198,26 @@ class MainWindow(Ui_mainWindow):
             self.error_coordinator = None
         # 保持对活跃线程的引用，防止被GC回收
         self._active_threads = []
+
+    def hide_non_na_servers(self):
+        """只保留美服和美服下的数据中心/服务器菜单。"""
+        visible_actions = {
+            self.select_server_na,
+            self.server_Aether.menuAction(),
+            self.server_Primal.menuAction(),
+            self.server_Crystal.menuAction(),
+            self.server_Dynamis.menuAction(),
+        }
+        for action in self.server.actions():
+            action.setVisible(action in visible_actions)
+
+        for action in (
+            self.select_server_china,
+            self.select_server_japan,
+            self.select_server_europe,
+            self.select_server_oceania,
+        ):
+            action.setVisible(False)
 
     def setup_menu(self):
         """
@@ -346,6 +399,7 @@ class MainWindow(Ui_mainWindow):
             # 显示格式：大区-服务器
             server_display = item.get_server_with_region(i['server'])
             server = QtWidgets.QTableWidgetItem(server_display)
+            server.setData(QtCore.Qt.UserRole, i['server'])
             server.setTextAlignment(4 | 128)
             pricePerUnit = QtWidgets.QTableWidgetItem("{:,.0f}".format(i['pricePerUnit']))
             pricePerUnit.setTextAlignment(4 | 128)
@@ -384,7 +438,10 @@ class MainWindow(Ui_mainWindow):
         # 记录旧的大区标识符
         old_world = item.world if hasattr(item, 'world') else None
         
-        server = show_price_page.all_server.item(selected.row(), 0).text()
+        server_item = show_price_page.all_server.item(selected.row(), 0)
+        server = server_item.data(QtCore.Qt.UserRole) or server_item.text()
+        if isinstance(server, str) and '（' in server:
+            server = server.split('（', 1)[0]
         item.server = server
         self.show_server.setText(server)
         
@@ -851,7 +908,7 @@ class MainWindow(Ui_mainWindow):
             # 重新查询
             recode1 = history_board.history_list.item(selected.row()).text().split()
             item_name = recode1[0]
-            item.server = recode1[-1]
+            item.server = normalize_na_server(recode1[-1])
             if item.server == 'Japan':
                 self.show_server.setText('日服')
             elif item.server == 'Europe':
@@ -1175,7 +1232,8 @@ history_file = str(Config.HISTORY_FILE)
 try:
     with open(history_file, 'r', encoding='utf-8') as his:
         history_json = json.load(his)
-        query_history = history_json['history']
+        history_json['server'] = normalize_na_server(history_json.get('server'))
+        query_history = [entry for entry in history_json['history'] if is_na_server(entry.get('server'))]
         # 如果使用者点开过软件，却没有查询道具，会生成空查询记录的历史文件。
         # 加入None条目，后面的切换界面判断方法就不用判空了
         if len(query_history) == 0:
@@ -1183,14 +1241,15 @@ try:
         item = Queryer(history_json['server'])
         logger.info("读取查询历史成功")
 except FileNotFoundError:
-    history_json = {"server": '猫小胖', 'use_static': True, "history": []}
+    history_json = {"server": Config.DEFAULT_SERVER, 'use_static': True, "history": []}
     query_history = [{"itemID": None, "itemName": None, "HQ": None, "server": None}]
-    item = Queryer('猫小胖')
+    item = Queryer(Config.DEFAULT_SERVER)
     logger.warning("没有发现历史数据，初始化历史数据")
 except KeyError:
     with open(history_file, 'r', encoding='utf-8') as his:
         history_json = json.load(his)
-        query_history = history_json['history']
+        history_json['server'] = normalize_na_server(history_json.get('server'))
+        query_history = [entry for entry in history_json['history'] if is_na_server(entry.get('server'))]
         if len(query_history) == 0:
             query_history = [{"itemID": None, "itemName": None, "HQ": None, "server": 'None'}]
     item = Queryer(history_json['server'])
@@ -1230,16 +1289,22 @@ def run_app():
     主程序开始
     """
     app = QtWidgets.QApplication(sys.argv)
+    app_font = app.font()
+    app_font.setFamily(APP_FONT_FAMILY)
+    app.setFont(app_font)
     desktop = app.primaryScreen().size()
     logger.debug("获取到桌面大小为{} * {}".format(desktop.width(), desktop.height()))
     app.setStyle("Fusion")
     widget = RQMainWindow()
     ui = MainWindow(widget)
     ui.setupUi(widget)
+    apply_font_family(widget)
     widget.resize(int(desktop.width() * 0.6), int(desktop.height() * 0.6))
     ui.setup_menu()
+    ui.hide_non_na_servers()
+    apply_font_family(widget)
     ui.jump_to_wiki.setOpenExternalLinks(True)
-    ui.show_server.setText(item.server)
+    ui.show_server.setText("美服" if item.server == Config.DEFAULT_SERVER else item.server)
     ui.item_icon.hide()
     ui.jump_to_wiki.hide()
     ui.show_cost.hide()
@@ -1257,6 +1322,7 @@ def run_app():
     """
     query_item_page = QueryItemId()
     query_item_page.setupUi(ui.query_item)
+    apply_font_family(ui.query_item)
     query_item_page.query_button.clicked.connect(ui.query_item_action)
     query_item_page.input_item_name.returnPressed.connect(ui.query_item_action)
     query_item_page.query_is_hq.clicked.connect(ui.select_hq_ornot)
@@ -1266,6 +1332,7 @@ def run_app():
     """
     select_item_page = SelectItemList()
     select_item_page.setupUi(ui.select_item)
+    apply_font_family(ui.select_item)
     select_item_page.back.clicked.connect(lambda: ui.show_data_box.setCurrentIndex(0))
     select_item_page.items_list_widget.doubleClicked.connect(ui.select_item_action)
     # 在选择物品界面选中物品后点击"选择物品"的按钮，把选中行作为对象传给价格查询模块
@@ -1276,6 +1343,7 @@ def run_app():
     """
     show_price_page = ShowPrice()
     show_price_page.setupUi(ui.show_price)
+    apply_font_family(ui.show_price)
     # 设定在售表格样式
     show_price_page.sale_list.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
     show_price_page.sale_list.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.Fixed)
@@ -1294,6 +1362,7 @@ def run_app():
     """
     cost_page = CostPage()
     cost_page.setupUi(ui.show_craft)
+    apply_font_family(ui.show_craft)
     cost_page.cost_tree.setColumnWidth(0, 500)
     cost_page.cost_tree.itemDoubleClicked.connect(ui.click_query_item_name)
     cost_page.click_c.clicked.connect(ui.click_copy_cost_tree)
@@ -1304,6 +1373,7 @@ def run_app():
     """
     loading_page = LoadingPage()
     loading_page.setupUi(ui.loading_ui)
+    apply_font_family(ui.loading_ui)
     loading_page.loading_text.setText("猴面雀正在为您查找资料。")
 
     """
@@ -1312,6 +1382,7 @@ def run_app():
     widget2 = QtWidgets.QMainWindow()
     history_board = HistoryPage()
     history_board.setupUi(widget2)
+    apply_font_family(widget2)
     widget2.resize(int(desktop.width() * 0.15), int(desktop.height() * 0.6))
     widget2.setMaximumSize(QtCore.QSize(int(desktop.width() * 0.3), int(desktop.height() * 0.6)))
     history_board.history_list.doubleClicked.connect(ui.click_history_query)
@@ -1330,6 +1401,7 @@ def run_app():
     widget3 = QtWidgets.QMainWindow()
     check_update_window = CheckUpdate()
     check_update_window.setupUi(widget3)
+    apply_font_family(widget3)
     # 关于面板的超链接激活
     check_update_window.label_8.setOpenExternalLinks(True)
     check_update_window.current_program_version.setText(program_version)

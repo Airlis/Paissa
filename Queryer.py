@@ -14,7 +14,7 @@ from cache.manager import cache_manager
 
 
 class Queryer(object):
-    def __init__(self, query_server='猫小胖', item_id=None):
+    def __init__(self, query_server=None, item_id=None):
         """
         对象初始化
         """
@@ -37,8 +37,8 @@ class Queryer(object):
         # 物品的原始材料成本
         self.o_cost = 0
         # 当前查询的服务器
-        self.server = query_server
-        self.world = 'maoxiaopang'
+        self.server = query_server or Config.DEFAULT_SERVER
+        self.world = Config.DEFAULT_SERVER
         self.every_server = []
         # 物品图标
         self.icon = None
@@ -57,6 +57,7 @@ class Queryer(object):
         self.cq = None
         self.server_config = None
         self.load_server_config()
+        self.server_list()
         logger.info("查询物品槽位初始化")
 
     @staticmethod
@@ -148,8 +149,18 @@ class Queryer(object):
         area_to_world = self.server_config['area_mappings']
 
         # 默认值
-        server_list = region_servers['maoxiaopang'][1:]
-        self.world = 'maoxiaopang'
+        default_server = Config.DEFAULT_SERVER
+        if default_server in area_to_world:
+            server_list = []
+            for world_key in area_to_world[default_server]:
+                server_list.extend(region_servers.get(world_key, [])[1:])  # 去掉数据中心名
+            self.world = default_server
+        elif default_server in region_servers:
+            server_list = region_servers[default_server][1:]  # 去掉大区名
+            self.world = default_server
+        else:
+            server_list = region_servers['maoxiaopang'][1:]
+            self.world = 'maoxiaopang'
 
         # 查找匹配的区域
         for world_key, servers in region_servers.items():
@@ -162,8 +173,8 @@ class Queryer(object):
             if self.server in area_to_world:
                 server_list = []
                 for world_key in area_to_world[self.server]:
-                    # 合并所有子区域服务器
-                    server_list.extend(region_servers.get(world_key, []))
+                    # 合并所有子区域服务器，跳过数据中心名
+                    server_list.extend(region_servers.get(world_key, [])[1:])
                 self.world = self.server
             else:
                 logger.warning(f"未知的服务器名称: {self.server}，使用默认服务器列表")
@@ -296,15 +307,16 @@ class Queryer(object):
                 if result is None or not result or 'listings' not in result or not result['listings']:
                     logger.debug(f"{server} 返回空结果")
                     return
+                listing = result['listings'][0]
                 # 重新组织比价用的数据，并加入全服查价的结果列表，如果不重新组织数据，某些区服查询出空集时，会报错
                 server_sale = {
-                    'server': server,
-                    'pricePerUnit': result['listings'][0]['pricePerUnit'],
-                    'hq': result['listings'][0]['hq'],
-                    'quantity': result['listings'][0]['quantity'],
-                    'total': result['listings'][0]['total'],
-                    'retainerName': result['listings'][0]['retainerName'],
-                    'lastReviewTime': result['listings'][0]['lastReviewTime']
+                    'server': listing.get('worldName', server),
+                    'pricePerUnit': listing['pricePerUnit'],
+                    'hq': listing['hq'],
+                    'quantity': listing['quantity'],
+                    'total': listing['total'],
+                    'retainerName': listing['retainerName'],
+                    'lastReviewTime': listing['lastReviewTime']
                 }
                 with result_lock:
                     self.every_server.append(server_sale)

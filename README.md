@@ -53,3 +53,23 @@ requests
 用 qt designer 直接打开```.ui```文件可以对界面设计进行可视化的编程。需要使用pyuic转化成```.py```文件。  
 ```.ui```文件和对应的```.py```文件中只包含界面显示相关的代码，界面上行为的代码都在```Window.py```中，后台数据查询的功能都封装在```Queryer.py```中。
 
+# **Windows exe 打包**
+
+推荐使用 PyInstaller 的 onedir 模式打包，生成目录在 `dist/Paissa/`，入口程序是 `dist/Paissa/Paissa.exe`：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -U pip
+python -m pip install -r requirements.txt
+python -m PyInstaller --noconfirm --clean Paissa.spec
+```
+
+如果不想使用 spec 文件，也可以直接运行：
+
+```powershell
+python -m PyInstaller --noconfirm --clean --windowed --name Paissa --add-data "Data;Data" --add-data "UI;UI" Paissa.py
+```
+
+不建议直接 `--onefile`，因为程序会读写 `Data/Paissa_query_history.log`、`Data/marketable.py` 等运行时数据；onedir 目录更稳定，也方便随 exe 一起更新数据文件。
+
