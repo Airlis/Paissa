@@ -2,6 +2,7 @@
 
 datas = [
     ("Assets/paissa.ico", "Assets"),
+    ("Assets/paissa.png", "Assets"),
     ("Data/hq.png", "Data"),
     ("Data/item.Pdt", "Data"),
     ("Data/marketable.py", "Data"),
